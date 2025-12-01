@@ -198,6 +198,24 @@ function removeSelected() {
   showToast?.('已移除');
 }
 
+// 定位到视图相关对象
+async function locateToView() {
+  const sv = props.item as ISelectedView;
+  await panelsStore.locateToView(sv);
+  showToast?.('已定位');
+}
+
+// 添加到展示视图
+function addToDisplay() {
+  const sv = props.item as ISelectedView;
+  const success = panelsStore.addDisplayedView(sv);
+  if (success) {
+    showToast?.('已添加展示');
+  } else {
+    showToast?.('已存在或已达上限');
+  }
+}
+
 // 开始编辑
 function startEdit() {
   const name = isSelectedPanel.value
@@ -467,6 +485,22 @@ function handleChildMoveToFolder(item: TreeItem, folderId: string | null) {
             </span>
           </template>
         </div>
+        <!-- 定位按钮 -->
+        <button
+          class="w-5 h-5 flex items-center justify-center rounded bg-blue-100 text-blue-600 hover:bg-blue-200 transition text-xs"
+          @click.stop="locateToView"
+          title="定位到相关对象"
+        >
+          📍
+        </button>
+        <!-- 展示按钮 -->
+        <button
+          class="w-5 h-5 flex items-center justify-center rounded bg-green-100 text-green-600 hover:bg-green-200 transition text-xs"
+          @click.stop="addToDisplay"
+          title="添加到展示视图"
+        >
+          👁
+        </button>
         <!-- 移除按钮 -->
         <button
           class="w-5 h-5 flex items-center justify-center rounded bg-red-100 text-red-600 hover:bg-red-200 transition text-sm"

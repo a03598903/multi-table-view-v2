@@ -1,15 +1,23 @@
 <script setup lang="ts">
 import { useSettingsStore } from '../../stores/settings';
+import { usePanelsStore } from '../../stores/panels';
 import { PANEL_CONFIGS } from '../../types';
 
 const settingsStore = useSettingsStore();
+const panelsStore = usePanelsStore();
 
 function expandAll() {
+  // 展开前6栏
   settingsStore.expandAllPanels();
+  // 展开所有展示视图
+  panelsStore.expandAllDisplayViews();
 }
 
 function collapseAll() {
+  // 折叠前6栏
   settingsStore.collapseAllPanels(PANEL_CONFIGS.map(p => p.key));
+  // 折叠所有展示视图
+  panelsStore.collapseAllDisplayViews();
 }
 </script>
 

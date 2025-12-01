@@ -5,9 +5,11 @@ import { useSettingsStore } from './stores/settings';
 import AppHeader from './components/layout/AppHeader.vue';
 import PanelContainer from './components/layout/PanelContainer.vue';
 import EditorPanel from './components/editor/EditorPanel.vue';
+import DisplayViewsContainer from './components/display/DisplayViewsContainer.vue';
 import ContextMenu from './components/common/ContextMenu.vue';
 import Toast from './components/common/Toast.vue';
 import type { IContextTarget } from './types';
+import { PANEL_CONFIGS } from './types';
 
 const panelsStore = usePanelsStore();
 const settingsStore = useSettingsStore();
@@ -84,6 +86,44 @@ function handleGlobalMouseUp() {
   }
 }
 
+// Alt+箭头键面板导航
+function handleKeyDown(e: KeyboardEvent) {
+  if (e.altKey && (e.key === 'ArrowLeft' || e.key === 'ArrowRight')) {
+    e.preventDefault();
+
+    if (e.key === 'ArrowLeft') {
+      panelsStore.prevPanel();
+    } else {
+      panelsStore.nextPanel();
+    }
+
+    // 滚动到活动面板
+    scrollToActivePanel();
+  }
+}
+
+// 滚动到活动面板并居中显示
+function scrollToActivePanel() {
+  if (!mainContentRef.value) return;
+
+  const panelIndex = panelsStore.activePanelIndex;
+  const panels = mainContentRef.value.querySelectorAll('.panel-wrapper');
+
+  if (panelIndex >= 0 && panelIndex < panels.length) {
+    const panel = panels[panelIndex] as HTMLElement;
+    const containerWidth = mainContentRef.value.clientWidth;
+    const panelLeft = panel.offsetLeft;
+    const panelWidth = panel.offsetWidth;
+
+    // 计算居中位置
+    const scrollTo = panelLeft - (containerWidth - panelWidth) / 2;
+    mainContentRef.value.scrollTo({
+      left: Math.max(0, scrollTo),
+      behavior: 'smooth'
+    });
+  }
+}
+
 // 初始化
 onMounted(async () => {
   await settingsStore.loadSettings();
@@ -92,12 +132,14 @@ onMounted(async () => {
   document.addEventListener('mousedown', handleGlobalMouseDown);
   document.addEventListener('mousemove', handleGlobalMouseMove);
   document.addEventListener('mouseup', handleGlobalMouseUp);
+  document.addEventListener('keydown', handleKeyDown);
 });
 
 onUnmounted(() => {
   document.removeEventListener('mousedown', handleGlobalMouseDown);
   document.removeEventListener('mousemove', handleGlobalMouseMove);
   document.removeEventListener('mouseup', handleGlobalMouseUp);
+  document.removeEventListener('keydown', handleKeyDown);
 });
 </script>
 
@@ -119,6 +161,9 @@ onUnmounted(() => {
 
       <!-- 编辑器面板 -->
       <EditorPanel />
+
+      <!-- 展示视图容器 -->
+      <DisplayViewsContainer />
     </div>
 
     <!-- 右键菜单 -->

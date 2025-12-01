@@ -3,7 +3,7 @@ import { computed, inject, ref, watch } from 'vue';
 import { usePanelsStore } from '../../stores/panels';
 import { useSettingsStore } from '../../stores/settings';
 import type { IPanelConfig, TreeItem, PanelKey } from '../../types';
-import { getPanelConfig } from '../../types';
+import { getPanelConfig, PANEL_CONFIGS } from '../../types';
 import * as api from '../../api';
 import PanelHeader from './PanelHeader.vue';
 import PanelActions from './PanelActions.vue';
@@ -17,6 +17,12 @@ const panelsStore = usePanelsStore();
 const settingsStore = useSettingsStore();
 
 const showToast = inject<(msg: string) => void>('showToast');
+
+// 面板索引
+const panelIndex = computed(() => PANEL_CONFIGS.findIndex(p => p.key === props.config.key));
+
+// 是否为活动面板
+const isActivePanel = computed(() => panelsStore.activePanelIndex === panelIndex.value);
 
 // 搜索相关
 const searchQuery = ref('');
@@ -287,8 +293,11 @@ function getAllFolders(items: TreeItem[]): TreeItem[] {
 
 <template>
   <div
-    class="bg-white rounded-xl shadow-xl flex flex-col overflow-hidden transition-all duration-200 flex-shrink-0"
-    :class="{ 'cursor-pointer hover:shadow-2xl': isCollapsed }"
+    class="panel-wrapper bg-white rounded-xl shadow-xl flex flex-col overflow-hidden transition-all duration-200 flex-shrink-0"
+    :class="{
+      'cursor-pointer hover:shadow-2xl': isCollapsed,
+      'ring-4 ring-blue-400 ring-opacity-75': isActivePanel
+    }"
     :style="panelStyle"
     @click="handlePanelClick"
   >

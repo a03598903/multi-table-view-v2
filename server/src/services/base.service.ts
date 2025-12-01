@@ -396,6 +396,48 @@ export class SelectedViewService {
     return true;
   }
 
+  // 获取视图定位信息（完整的层级路径）
+  getViewLocation(viewId: string): {
+    shareholder?: { id: string; name: string };
+    company?: { id: string; name: string };
+    project?: { id: string; name: string };
+    table?: { id: string; name: string };
+    view?: { id: string; name: string };
+  } | null {
+    // 查询视图及其完整层级路径
+    const result = query<{
+      view_id: string; view_name: string;
+      table_id: string; table_name: string;
+      project_id: string; project_name: string;
+      company_id: string; company_name: string;
+      shareholder_id: string; shareholder_name: string;
+    }>(`
+      SELECT
+        v.id as view_id, v.name as view_name,
+        t.id as table_id, t.name as table_name,
+        p.id as project_id, p.name as project_name,
+        c.id as company_id, c.name as company_name,
+        s.id as shareholder_id, s.name as shareholder_name
+      FROM views v
+      JOIN tables t ON v.table_id = t.id
+      JOIN projects p ON t.project_id = p.id
+      JOIN companies c ON p.company_id = c.id
+      JOIN shareholders s ON c.shareholder_id = s.id
+      WHERE v.id = ?
+    `, [viewId]);
+
+    if (result.length === 0) return null;
+
+    const row = result[0];
+    return {
+      shareholder: { id: row.shareholder_id, name: row.shareholder_name },
+      company: { id: row.company_id, name: row.company_name },
+      project: { id: row.project_id, name: row.project_name },
+      table: { id: row.table_id, name: row.table_name },
+      view: { id: row.view_id, name: row.view_name }
+    };
+  }
+
   // 构建树形结构
   private buildTree(folders: IFolder[], items: TreeItem[]): TreeItem[] {
     const buildLevel = (parentId: string | null = null): TreeItem[] => {

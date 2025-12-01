@@ -115,6 +115,28 @@ export async function reorderItems(type: string, items: IReorderItem[]): Promise
   await api.put('/reorder', { type, items });
 }
 
+// ==================== 定位API ====================
+
+// 视图定位信息接口
+export interface IViewLocation {
+  shareholder?: { id: string; name: string };
+  company?: { id: string; name: string };
+  project?: { id: string; name: string };
+  table?: { id: string; name: string };
+  view?: { id: string; name: string };
+}
+
+// 获取视图定位信息
+export async function getViewLocation(viewId: string): Promise<IViewLocation | null> {
+  try {
+    const { data } = await api.get<IViewLocation>(`/views/${viewId}/location`);
+    return data;
+  } catch (e) {
+    console.error('获取视图定位信息失败:', e);
+    return null;
+  }
+}
+
 // ==================== 设置API ====================
 
 // 获取设置

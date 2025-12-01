@@ -41,6 +41,16 @@ export const usePanelsStore = defineStore('panels', () => {
   // 正在编辑的项目 ID
   const editingItemId = ref<string | null>(null);
 
+  // 展示的视图列表（最多20个）
+  const displayedViews = ref<ISelectedView[]>([]);
+  const MAX_DISPLAYED_VIEWS = 20;
+
+  // 展示视图的折叠状态
+  const collapsedDisplayViews = ref<Set<string>>(new Set());
+
+  // 当前选中的面板索引（用于键盘导航）
+  const activePanelIndex = ref<number>(0);
+
   // 计算属性
   const getPanelData = computed(() => (key: PanelKey) => data.value[key]);
   const getSelectedItem = computed(() => (key: PanelKey) => selected.value[key]);
@@ -202,6 +212,8 @@ export const usePanelsStore = defineStore('panels', () => {
     if (currentEditView.value?.id === id) {
       currentEditView.value = null;
     }
+    // 从展示列表中移除
+    removeDisplayedView(id);
   }
 
   // 查找项目
@@ -221,6 +233,144 @@ export const usePanelsStore = defineStore('panels', () => {
     editingItemId.value = id;
   }
 
+  // ==================== 展示视图管理 ====================
+
+  // 添加展示视图
+  function addDisplayedView(view: ISelectedView): boolean {
+    // 检查是否已存在
+    if (displayedViews.value.some(v => v.id === view.id)) {
+      return false;
+    }
+    // 检查数量限制
+    if (displayedViews.value.length >= MAX_DISPLAYED_VIEWS) {
+      return false;
+    }
+    displayedViews.value.push(view);
+    // 默认收缩状态
+    collapsedDisplayViews.value.add(view.id);
+    return true;
+  }
+
+  // 移除展示视图
+  function removeDisplayedView(viewId: string) {
+    const index = displayedViews.value.findIndex(v => v.id === viewId);
+    if (index !== -1) {
+      displayedViews.value.splice(index, 1);
+      collapsedDisplayViews.value.delete(viewId);
+    }
+  }
+
+  // 切换展示视图折叠状态
+  function toggleDisplayViewCollapse(viewId: string) {
+    if (collapsedDisplayViews.value.has(viewId)) {
+      collapsedDisplayViews.value.delete(viewId);
+    } else {
+      collapsedDisplayViews.value.add(viewId);
+    }
+  }
+
+  // 检查展示视图是否折叠
+  function isDisplayViewCollapsed(viewId: string): boolean {
+    return collapsedDisplayViews.value.has(viewId);
+  }
+
+  // 重新排序展示视图
+  function expandAllDisplayViews() {
+    collapsedDisplayViews.value.clear();
+  }
+
+  // 折叠所有展示视图
+  function collapseAllDisplayViews() {
+    displayedViews.value.forEach(v => collapsedDisplayViews.value.add(v.id));
+  }
+
+  // 重新排序展示视图
+  function reorderDisplayedViews(newOrder: ISelectedView[]) {
+    displayedViews.value = newOrder;
+  }
+
+  // ==================== 定位功能 ====================
+
+  // 定位到视图的相关对象（根据已选视图的信息定位左侧面板）
+  async function locateToView(selectedView: ISelectedView): Promise<void> {
+    // 获取视图的完整路径信息
+    try {
+      // 1. 获取视图信息
+      const viewData = await api.fetchPanelData('view', selectedView.view_id);
+
+      // 需要从服务端获取完整的层级信息
+      // 调用专门的定位 API
+      const locationInfo = await api.getViewLocation(selectedView.view_id);
+
+      if (locationInfo) {
+        // 依次选择各级对象
+        if (locationInfo.shareholder) {
+          const shareholderItem = findItemById(data.value.shareholder, locationInfo.shareholder.id);
+          if (shareholderItem) {
+            await selectItem('shareholder', shareholderItem);
+          }
+        }
+
+        // 等待面板加载完成后继续选择
+        await new Promise(resolve => setTimeout(resolve, 100));
+
+        if (locationInfo.company) {
+          const companyItem = findItemById(data.value.company, locationInfo.company.id);
+          if (companyItem) {
+            await selectItem('company', companyItem);
+          }
+        }
+
+        await new Promise(resolve => setTimeout(resolve, 100));
+
+        if (locationInfo.project) {
+          const projectItem = findItemById(data.value.project, locationInfo.project.id);
+          if (projectItem) {
+            await selectItem('project', projectItem);
+          }
+        }
+
+        await new Promise(resolve => setTimeout(resolve, 100));
+
+        if (locationInfo.table) {
+          const tableItem = findItemById(data.value.table, locationInfo.table.id);
+          if (tableItem) {
+            await selectItem('table', tableItem);
+          }
+        }
+
+        await new Promise(resolve => setTimeout(resolve, 100));
+
+        if (locationInfo.view) {
+          const viewItem = findItemById(data.value.view, locationInfo.view.id);
+          if (viewItem) {
+            selected.value.view = viewItem;
+          }
+        }
+      }
+    } catch (e) {
+      console.error('定位失败:', e);
+    }
+  }
+
+  // ==================== 面板导航 ====================
+
+  // 设置活动面板索引
+  function setActivePanelIndex(index: number) {
+    const maxIndex = PANEL_CONFIGS.length; // 包括编辑器面板
+    activePanelIndex.value = Math.max(0, Math.min(index, maxIndex));
+  }
+
+  // 切换到上一个面板
+  function prevPanel() {
+    setActivePanelIndex(activePanelIndex.value - 1);
+  }
+
+  // 切换到下一个面板
+  function nextPanel() {
+    setActivePanelIndex(activePanelIndex.value + 1);
+  }
+
   // 初始化
   async function init(): Promise<void> {
     await loadPanelAndSelect('shareholder', true);
@@ -234,6 +384,9 @@ export const usePanelsStore = defineStore('panels', () => {
     currentEditView,
     selectedViewsMap,
     editingItemId,
+    displayedViews,
+    collapsedDisplayViews,
+    activePanelIndex,
     getPanelData,
     getSelectedItem,
     isLoading,
@@ -246,6 +399,17 @@ export const usePanelsStore = defineStore('panels', () => {
     removeSelectedView,
     findItemById,
     setEditingItemId,
+    addDisplayedView,
+    removeDisplayedView,
+    toggleDisplayViewCollapse,
+    isDisplayViewCollapsed,
+    expandAllDisplayViews,
+    collapseAllDisplayViews,
+    reorderDisplayedViews,
+    locateToView,
+    setActivePanelIndex,
+    prevPanel,
+    nextPanel,
     init
   };
 });

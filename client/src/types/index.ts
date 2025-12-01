@@ -104,6 +104,9 @@ export interface ISettings {
   panelWidths: Record<PanelKey, number>;
   editorWidth: number;
   collapsedPanels: PanelKey[];
+  editorCollapsed?: boolean;
+  displayViewWidths?: Record<string, number>;
+  collapsedDisplayViews?: string[];
 }
 
 // 右键菜单目标
