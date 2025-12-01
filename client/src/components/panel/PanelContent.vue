@@ -2,7 +2,7 @@
 import { computed, inject, provide, ref, onMounted, onUnmounted, type Ref } from 'vue';
 import draggable from 'vuedraggable';
 import { usePanelsStore } from '../../stores/panels';
-import type { IPanelConfig, TreeItem, IReorderItem, IFolder } from '../../types';
+import type { IPanelConfig, TreeItem, IReorderItem, PanelKey } from '../../types';
 import { getPanelConfig } from '../../types';
 import TreeItemComponent from '../tree/TreeItem.vue';
 import * as api from '../../api';
@@ -21,6 +21,17 @@ const mainContentRef = inject<Ref<HTMLElement | null>>('mainContentRef');
 // 提供高亮 ID 给子组件
 provide('highlightedItemId', computed(() => props.highlightedItemId));
 provide('searchQuery', computed(() => props.searchQuery));
+
+// ==================== 全局拖放状态管理 ====================
+const globalDragItem = ref<{ id: string; type: string; panelKey: PanelKey } | null>(null);
+
+function setGlobalDragItem(item: { id: string; type: string; panelKey: PanelKey } | null) {
+  globalDragItem.value = item;
+}
+
+// 提供给子组件
+provide('globalDragItem', globalDragItem);
+provide('setGlobalDragItem', setGlobalDragItem);
 
 // 容器引用
 const containerRef = ref<HTMLElement | null>(null);
@@ -93,13 +104,6 @@ const parentTitle = computed(() => {
   return parentConfig?.title || '';
 });
 
-// 获取面板项目的类型标识（用于 reorder API）
-function getItemTypeForApi(item: TreeItem): string {
-  if (item.type === 'folder') return 'folder';
-  if (item.type === 'selected') return 'selected';
-  return props.config.key;
-}
-
 // 拖拽结束处理
 async function handleDragEnd(evt: { oldIndex: number; newIndex: number; item?: HTMLElement }) {
   if (evt.oldIndex === evt.newIndex) return;
@@ -146,13 +150,60 @@ async function handleDragMove(item: TreeItem, targetFolderId: string | null) {
     showToast?.('移动失败');
   }
 }
+
+// 根目录拖放处理 - 用于将项目移出文件夹到根目录
+const isRootDropTarget = ref(false);
+
+function handleRootDragOver(e: DragEvent) {
+  if (!globalDragItem.value) return;
+  e.preventDefault();
+  e.dataTransfer!.dropEffect = 'move';
+  isRootDropTarget.value = true;
+}
+
+function handleRootDragLeave(e: DragEvent) {
+  const relatedTarget = e.relatedTarget as HTMLElement | null;
+  const currentTarget = e.currentTarget as HTMLElement;
+  if (!relatedTarget || !currentTarget.contains(relatedTarget)) {
+    isRootDropTarget.value = false;
+  }
+}
+
+async function handleRootDrop(e: DragEvent) {
+  e.preventDefault();
+  isRootDropTarget.value = false;
+
+  const dragData = e.dataTransfer?.getData('text/plain');
+  if (!dragData) return;
+
+  try {
+    const dragItem = JSON.parse(dragData);
+
+    // 移动到根目录（folder_id = null）
+    if (dragItem.type === 'folder') {
+      await api.updateFolder(dragItem.id, { parent_id: null });
+    } else {
+      await api.moveItem(dragItem.type, dragItem.id, null);
+    }
+
+    await panelsStore.loadPanel(props.config.key);
+    showToast?.('已移到根目录');
+  } catch (err) {
+    console.error('移动失败:', err);
+    showToast?.('移动失败');
+  }
+}
 </script>
 
 <template>
   <div
     ref="containerRef"
     class="panel-scroll-area flex-1 overflow-y-auto overflow-x-hidden p-2"
+    :class="{ 'bg-blue-50': isRootDropTarget }"
     @mousedown="handleMouseDown"
+    @dragover="handleRootDragOver"
+    @dragleave="handleRootDragLeave"
+    @drop="handleRootDrop"
   >
     <!-- 空状态 -->
     <div
@@ -179,9 +230,19 @@ async function handleDragMove(item: TreeItem, targetFolderId: string | null) {
         <TreeItemComponent
           :item="element"
           :panel-key="config.key"
+          :depth="0"
           @move-to-folder="handleDragMove"
         />
       </template>
     </draggable>
+
+    <!-- 拖放到根目录的提示 -->
+    <div
+      v-if="globalDragItem && items.length > 0"
+      class="mt-2 p-2 border-2 border-dashed border-gray-300 rounded-md text-center text-gray-400 text-sm"
+      :class="{ 'border-blue-500 bg-blue-50 text-blue-600': isRootDropTarget }"
+    >
+      拖放到此处移到根目录
+    </div>
   </div>
 </template>

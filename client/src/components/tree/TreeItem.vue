@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref, inject, watch, nextTick, type ComputedRef } from 'vue';
+import { computed, ref, inject, watch, nextTick, type ComputedRef, type Ref } from 'vue';
 import draggable from 'vuedraggable';
 import { usePanelsStore } from '../../stores/panels';
 import type { TreeItem, PanelKey, ISelectedView, IContextTarget, IFolder, IReorderItem } from '../../types';
@@ -9,6 +9,7 @@ import * as api from '../../api';
 const props = defineProps<{
   item: TreeItem;
   panelKey: PanelKey;
+  depth?: number;
 }>();
 
 const emit = defineEmits<{
@@ -21,7 +22,12 @@ const showContextMenu = inject<(e: MouseEvent, target: IContextTarget) => void>(
 const highlightedItemId = inject<ComputedRef<string | null>>('highlightedItemId', computed(() => null));
 const searchQuery = inject<ComputedRef<string>>('searchQuery', computed(() => ''));
 
+// 全局拖放状态
+const globalDragItem = inject<Ref<{ id: string; type: string; panelKey: PanelKey } | null>>('globalDragItem');
+const setGlobalDragItem = inject<(item: { id: string; type: string; panelKey: PanelKey } | null) => void>('setGlobalDragItem');
+
 const config = getPanelConfig(props.panelKey);
+const currentDepth = props.depth || 0;
 
 // 是否高亮（搜索结果）
 const isHighlighted = computed(() => {
@@ -72,24 +78,69 @@ const itemColor = computed(() => {
 const isEditing = ref(false);
 const editName = ref('');
 
-// 拖放高亮状态
-const isDragOver = ref(false);
+// 本地拖放高亮状态
+const isDropTarget = ref(false);
 
-// 输入框引用
-const editInputRef = ref<HTMLInputElement | null>(null);
+// 节点引用
+const nodeRef = ref<HTMLElement | null>(null);
+
+// 是否正在被拖拽
+const isDragging = computed(() => {
+  return globalDragItem?.value?.id === props.item.id;
+});
+
+// 是否可以作为拖放目标
+const canBeDropTarget = computed(() => {
+  if (!isFolder.value) return false;
+  if (!globalDragItem?.value) return false;
+  if (globalDragItem.value.id === props.item.id) return false;
+  // 不能拖到自己的子文件夹
+  if (globalDragItem.value.type === 'folder') {
+    return !isDescendantOf(props.item.id, globalDragItem.value.id);
+  }
+  return true;
+});
+
+// 检查 targetId 是否是 sourceId 的后代
+function isDescendantOf(targetId: string, sourceId: string): boolean {
+  const findInTree = (items: TreeItem[], searchId: string): TreeItem | null => {
+    for (const item of items) {
+      if (item.id === searchId) return item;
+      if ('children' in item && item.children) {
+        const found = findInTree(item.children, searchId);
+        if (found) return found;
+      }
+    }
+    return null;
+  };
+
+  const checkDescendant = (item: TreeItem, targetId: string): boolean => {
+    if (item.id === targetId) return true;
+    if ('children' in item && item.children) {
+      for (const child of item.children) {
+        if (checkDescendant(child, targetId)) return true;
+      }
+    }
+    return false;
+  };
+
+  // 从面板数据中找到源文件夹
+  const panelData = panelsStore.getPanelData(props.panelKey);
+  const sourceFolder = findInTree(panelData, sourceId);
+  if (!sourceFolder) return false;
+
+  return checkDescendant(sourceFolder, targetId);
+}
 
 // 监听 editingItemId，自动进入编辑状态
 watch(() => panelsStore.editingItemId, async (newId) => {
   if (newId === props.item.id) {
-    // 滚动到该项目
     await nextTick();
     const element = document.querySelector(`[data-item-id="${props.item.id}"]`);
     if (element) {
       element.scrollIntoView({ behavior: 'smooth', block: 'center' });
     }
-    // 进入编辑状态
     startEdit();
-    // 清除 editingItemId
     panelsStore.setEditingItemId(null);
   }
 });
@@ -108,6 +159,7 @@ function handleDoubleClick() {
 // 右键菜单
 function handleContextMenu(e: MouseEvent) {
   e.preventDefault();
+  e.stopPropagation();
   showContextMenu?.(e, {
     id: props.item.id,
     type: props.item.type,
@@ -115,8 +167,9 @@ function handleContextMenu(e: MouseEvent) {
   });
 }
 
-// 更多操作按钮点击（模拟右键菜单）
+// 更多操作按钮点击
 function handleMoreClick(e: MouseEvent) {
+  e.stopPropagation();
   showContextMenu?.(e, {
     id: props.item.id,
     type: props.item.type,
@@ -125,7 +178,8 @@ function handleMoreClick(e: MouseEvent) {
 }
 
 // 切换文件夹展开
-async function toggleFolder() {
+async function toggleFolder(e: MouseEvent) {
+  e.stopPropagation();
   if (!isFolder.value) return;
   const folder = props.item as IFolder;
   await api.updateFolder(folder.id, { expanded: folder.expanded ? 0 : 1 });
@@ -151,7 +205,6 @@ function startEdit() {
     : props.item.name;
   editName.value = name;
   isEditing.value = true;
-  // 等待 DOM 更新后选中文本
   nextTick(() => {
     const input = document.querySelector(`[data-item-id="${props.item.id}"] input`) as HTMLInputElement;
     if (input) {
@@ -195,99 +248,93 @@ function handleKeydown(e: KeyboardEvent) {
   }
 }
 
-// 文件夹拖放进入
-function handleDragEnter(e: DragEvent) {
-  if (!isFolder.value) return;
-  e.preventDefault();
+// ==================== 拖放逻辑 ====================
+
+// 拖拽开始 - 从拖拽手柄开始
+function handleDragStart(e: DragEvent) {
   e.stopPropagation();
-  e.stopImmediatePropagation();
-  isDragOver.value = true;
+
+  const dragData = {
+    id: props.item.id,
+    type: props.item.type,
+    panelKey: props.panelKey
+  };
+
+  e.dataTransfer?.setData('text/plain', JSON.stringify(dragData));
+  e.dataTransfer!.effectAllowed = 'move';
+
+  // 设置全局拖拽状态
+  setGlobalDragItem?.(dragData);
 }
 
-// 文件夹拖放离开
+// 拖拽结束
+function handleDragEnd(e: DragEvent) {
+  e.stopPropagation();
+  // 清除全局拖拽状态
+  setGlobalDragItem?.(null);
+  isDropTarget.value = false;
+}
+
+// 拖放进入（文件夹接收拖放）
+function handleDragEnter(e: DragEvent) {
+  if (!canBeDropTarget.value) return;
+  e.preventDefault();
+  e.stopPropagation();
+  isDropTarget.value = true;
+}
+
+// 拖放悬停
+function handleDragOver(e: DragEvent) {
+  if (!canBeDropTarget.value) return;
+  e.preventDefault();
+  e.stopPropagation();
+  e.dataTransfer!.dropEffect = 'move';
+}
+
+// 拖放离开
 function handleDragLeave(e: DragEvent) {
   if (!isFolder.value) return;
   e.stopPropagation();
-  e.stopImmediatePropagation();
-  // 检查是否真的离开了当前文件夹（而不是进入子元素）
+
+  // 检查是否真的离开了（不是进入子元素）
   const relatedTarget = e.relatedTarget as HTMLElement | null;
   const currentTarget = e.currentTarget as HTMLElement;
-  if (relatedTarget && currentTarget.contains(relatedTarget)) {
-    return;
+
+  if (!relatedTarget || !currentTarget.contains(relatedTarget)) {
+    isDropTarget.value = false;
   }
-  isDragOver.value = false;
 }
 
-// 文件夹拖放悬停
-function handleDragOver(e: DragEvent) {
-  if (!isFolder.value) return;
-  e.preventDefault();
-  e.stopPropagation();
-  e.stopImmediatePropagation();
-}
-
-// 检查是否是子文件夹（防止循环引用）
-function isDescendant(parentId: string, childId: string): boolean {
-  const findInChildren = (items: TreeItem[]): boolean => {
-    for (const item of items) {
-      if (item.id === childId) return true;
-      if (item.type === 'folder' && 'children' in item && item.children) {
-        if (findInChildren(item.children)) return true;
-      }
-    }
-    return false;
-  };
-
-  if (props.item.type === 'folder' && 'children' in props.item && props.item.children) {
-    return findInChildren(props.item.children);
-  }
-  return false;
-}
-
-// 文件夹拖放放下
+// 放下
 async function handleDrop(e: DragEvent) {
-  if (!isFolder.value) return;
+  if (!canBeDropTarget.value) return;
+
   e.preventDefault();
   e.stopPropagation();
-  e.stopImmediatePropagation();
-  isDragOver.value = false;
+  isDropTarget.value = false;
 
   const dragData = e.dataTransfer?.getData('text/plain');
   if (!dragData) return;
 
   try {
     const dragItem = JSON.parse(dragData);
-    if (dragItem.id === props.item.id) return; // 不能拖到自己
 
-    // 检查是否拖到自己的子文件夹（防止循环引用）
-    if (dragItem.type === 'folder' && isDescendant(dragItem.id, props.item.id)) {
-      showToast?.('不能移动到子文件夹');
-      return;
-    }
-
-    // 文件夹移动使用 parent_id，普通项目使用 folder_id
+    // 执行移动操作
     if (dragItem.type === 'folder') {
       await api.updateFolder(dragItem.id, { parent_id: props.item.id });
     } else {
       await api.moveItem(dragItem.type, dragItem.id, props.item.id);
     }
+
     await panelsStore.loadPanel(props.panelKey);
     showToast?.('已移入文件夹');
-  } catch (e) {
+  } catch (err) {
+    console.error('移动失败:', err);
     showToast?.('移动失败');
   }
 }
 
-// 拖拽开始
-function handleDragStart(e: DragEvent) {
-  e.dataTransfer?.setData('text/plain', JSON.stringify({
-    id: props.item.id,
-    type: props.item.type,
-    panelKey: props.panelKey
-  }));
-}
-
-// 文件夹内子项拖拽结束
+// 文件夹内子项排序结束
 async function handleChildrenDragEnd(evt: { oldIndex: number; newIndex: number }) {
   if (evt.oldIndex === evt.newIndex) return;
   if (!isFolder.value) return;
@@ -304,7 +351,6 @@ async function handleChildrenDragEnd(evt: { oldIndex: number; newIndex: number }
     });
   });
 
-  // 分别更新文件夹和实体
   const folderItems = reorderItems.filter((_, i) => childItems[i].type === 'folder');
   const entityItems = reorderItems.filter((_, i) => childItems[i].type !== 'folder');
 
@@ -330,32 +376,36 @@ function handleChildMoveToFolder(item: TreeItem, folderId: string | null) {
 
 <template>
   <div
-    class="select-none relative"
+    ref="nodeRef"
+    class="tree-item select-none"
+    :class="{ 'opacity-50': isDragging }"
     :data-item-id="item.id"
-    draggable="true"
-    @dragstart="handleDragStart"
-    @dragenter="handleDragEnter"
-    @dragleave="handleDragLeave"
-    @dragover="handleDragOver"
-    @drop="handleDrop"
+    :data-depth="currentDepth"
   >
-    <!-- 节点 -->
+    <!-- 节点内容 - 整个节点都可以接收拖放 -->
     <div
-      class="group flex items-center gap-1.5 px-2 py-1.5 rounded-md cursor-pointer transition-all border-2 mb-0.5 text-sm"
+      class="tree-node group flex items-center gap-1.5 px-2 py-1.5 rounded-md cursor-pointer transition-all border-2 mb-0.5 text-sm"
       :class="{
         'bg-blue-50 border-blue-500': isActive && !isFolder && !isHighlighted,
         'bg-orange-100 border-orange-500': isHighlighted,
-        'hover:bg-gray-100 border-transparent': !isActive && !isDragOver && !isHighlighted,
+        'hover:bg-gray-100 border-transparent': !isActive && !isDropTarget && !isHighlighted,
         'font-medium': isFolder,
-        'bg-yellow-50 border-yellow-400 border-dashed': isDragOver && isFolder
+        'bg-yellow-100 border-yellow-500 border-dashed shadow-lg': isDropTarget && isFolder
       }"
       @click="handleClick"
       @dblclick="handleDoubleClick"
       @contextmenu="handleContextMenu"
+      @dragenter="handleDragEnter"
+      @dragover="handleDragOver"
+      @dragleave="handleDragLeave"
+      @drop="handleDrop"
     >
-      <!-- 拖拽手柄 -->
+      <!-- 拖拽手柄 - 只有这里可以发起拖拽 -->
       <span
         class="drag-handle w-4 h-4 flex items-center justify-center text-gray-300 hover:text-gray-500 cursor-grab active:cursor-grabbing"
+        draggable="true"
+        @dragstart="handleDragStart"
+        @dragend="handleDragEnd"
         @click.stop
       >
         ⋮⋮
@@ -363,9 +413,9 @@ function handleChildMoveToFolder(item: TreeItem, folderId: string | null) {
 
       <!-- 展开图标 -->
       <span
-        class="w-4 h-4 flex items-center justify-center text-xs text-gray-400 transition-transform"
+        class="w-4 h-4 flex items-center justify-center text-xs text-gray-400 transition-transform cursor-pointer"
         :class="{ 'rotate-90': isExpanded, 'invisible': !isFolder }"
-        @click.stop="toggleFolder"
+        @click="toggleFolder"
       >
         ▶
       </span>
@@ -448,7 +498,7 @@ function handleChildMoveToFolder(item: TreeItem, folderId: string | null) {
         {{ isChecked ? '✓' : '' }}
       </div>
 
-      <!-- 更多操作按钮（三点图标）始终显示 -->
+      <!-- 更多操作按钮 -->
       <button
         class="w-6 h-6 flex items-center justify-center rounded text-gray-400 hover:bg-gray-200 hover:text-gray-600 transition"
         @click.stop="handleMoreClick"
@@ -458,11 +508,10 @@ function handleChildMoveToFolder(item: TreeItem, folderId: string | null) {
       </button>
     </div>
 
-    <!-- 子项（文件夹内可拖拽排序） -->
+    <!-- 子项（文件夹展开时显示） -->
     <div
-      v-if="isFolder && children.length > 0"
+      v-if="isFolder && isExpanded && children.length > 0"
       class="ml-4 pl-2 border-l border-dashed border-gray-300"
-      :class="{ 'hidden': !isExpanded }"
     >
       <draggable
         :list="children"
@@ -471,16 +520,26 @@ function handleChildMoveToFolder(item: TreeItem, folderId: string | null) {
         :animation="200"
         ghost-class="opacity-50"
         drag-class="bg-blue-100"
+        handle=".drag-handle"
         @end="handleChildrenDragEnd"
       >
         <template #item="{ element }">
           <TreeItemComponent
             :item="element"
             :panel-key="panelKey"
+            :depth="currentDepth + 1"
             @move-to-folder="handleChildMoveToFolder"
           />
         </template>
       </draggable>
+    </div>
+
+    <!-- 空文件夹展开时的占位符 -->
+    <div
+      v-if="isFolder && isExpanded && children.length === 0"
+      class="ml-4 pl-2 border-l border-dashed border-gray-300 py-2 text-gray-400 text-xs italic"
+    >
+      空文件夹
     </div>
   </div>
 </template>
