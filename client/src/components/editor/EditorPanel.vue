@@ -1,0 +1,96 @@
+<script setup lang="ts">
+import { computed } from 'vue';
+import { usePanelsStore } from '../../stores/panels';
+import { useSettingsStore } from '../../stores/settings';
+
+const panelsStore = usePanelsStore();
+const settingsStore = useSettingsStore();
+
+const currentView = computed(() => panelsStore.currentEditView);
+const editorWidth = computed(() => settingsStore.editorWidth);
+
+function onWidthChange(value: number) {
+  settingsStore.setEditorWidth(value);
+}
+
+function resetWidth() {
+  settingsStore.resetEditorWidth();
+}
+</script>
+
+<template>
+  <div
+    class="bg-white rounded-xl shadow-xl flex flex-col overflow-hidden flex-shrink-0"
+    :style="{ width: `${editorWidth}vw` }"
+  >
+    <!-- 宽度控制 -->
+    <div class="flex items-center gap-2 px-2 py-1 bg-blue-50 border-b border-blue-100 text-xs text-blue-700">
+      <span>宽度</span>
+      <input
+        type="range"
+        class="flex-1 h-1 accent-blue-500"
+        min="30"
+        max="80"
+        :value="editorWidth"
+        @input="onWidthChange(Number(($event.target as HTMLInputElement).value))"
+      />
+      <span class="w-8 text-center font-medium">{{ editorWidth }}%</span>
+      <button
+        class="px-1.5 py-0.5 bg-blue-100 rounded text-xs hover:bg-blue-200"
+        @click="resetWidth"
+      >
+        重置
+      </button>
+    </div>
+
+    <!-- 头部 -->
+    <div class="flex items-center gap-2 px-3 py-2.5 bg-gray-50 border-b border-gray-200 font-semibold text-gray-600">
+      📝 视图编辑
+    </div>
+
+    <!-- 内容 -->
+    <div class="flex-1 p-5 overflow-y-auto">
+      <!-- 空状态 -->
+      <div v-if="!currentView" class="h-full flex flex-col items-center justify-center text-gray-400">
+        <div class="text-5xl mb-4">📝</div>
+        <div>请从"已选视图"中选择一个视图进行编辑</div>
+      </div>
+
+      <!-- 视图详情 -->
+      <template v-else>
+        <div class="flex items-center gap-3 pb-4 border-b border-gray-200 mb-5">
+          <span class="text-xl font-semibold text-gray-800">{{ currentView.view_name }}</span>
+          <span class="px-2.5 py-1 bg-blue-50 text-blue-600 rounded-full text-xs">
+            {{ currentView.view_type }}
+          </span>
+        </div>
+
+        <div class="grid grid-cols-[100px_1fr] gap-3 text-sm">
+          <span class="text-gray-500 font-medium">编码</span>
+          <span class="text-gray-800">{{ currentView.code }}</span>
+
+          <span class="text-gray-500 font-medium">所属表格</span>
+          <span class="text-gray-800 flex items-center gap-1.5">
+            <span
+              class="w-3 h-3 rounded-full inline-block"
+              :style="{ background: currentView.table_color }"
+            ></span>
+            {{ currentView.table_name }}
+          </span>
+
+          <span class="text-gray-500 font-medium">视图类型</span>
+          <span class="text-gray-800">{{ currentView.view_type }}</span>
+
+          <span class="text-gray-500 font-medium">创建时间</span>
+          <span class="text-gray-800">{{ currentView.created_at || '-' }}</span>
+        </div>
+
+        <div class="mt-8 p-5 bg-gray-50 rounded-lg text-center text-gray-400">
+          <div class="text-3xl mb-3">🚧</div>
+          <div>视图编辑功能开发中...</div>
+          <div class="text-xs mt-1">此区域将用于编辑视图的具体内容</div>
+        </div>
+      </template>
+    </div>
+  </div>
+</template>

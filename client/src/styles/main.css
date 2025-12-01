@@ -1,0 +1,51 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* 自定义基础样式 */
+html, body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  height: 100%;
+  overflow-y: hidden;
+  overflow-x: auto;
+}
+
+#app {
+  height: 100%;
+}
+
+body.grabbing, body.grabbing * {
+  cursor: grabbing !important;
+  user-select: none !important;
+}
+
+/* 滚动条样式 */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: #f1f1f1;
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #c1c1c1;
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #a8a8a8;
+}
+
+/* 高亮动画 */
+@keyframes highlight {
+  0%, 100% { background: transparent; }
+  50% { background: #fff3bf; }
+}
+
+.highlight-animation {
+  animation: highlight 1s;
+}
