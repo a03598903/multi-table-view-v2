@@ -110,6 +110,9 @@ export interface ISettings {
   collapsedDisplayViews?: string[];
   // 临时面板数据
   tempPanels?: ITempPanelSettings[];
+  // 编辑网格布局
+  gridLayout?: IGridLayoutConfig;
+  editorPanels?: IEditorPanelData[];
 }
 
 // 临时面板保存设置
@@ -140,4 +143,118 @@ export interface IReorderItem {
   sort_order: number;
   folder_id?: string | null;
   parent_id?: string | null;
+}
+
+// ==================== 视图配置类型 ====================
+
+// 视图类型
+export type ViewType = 'grid' | 'kanban' | 'calendar' | 'gantt';
+
+// 列配置
+export interface IColumnConfig {
+  key: string;
+  label: string;
+  type: 'text' | 'number' | 'date' | 'select' | 'checkbox' | 'url' | 'email';
+  visible: boolean;
+  width?: number;
+  options?: string[];  // select 类型的选项
+}
+
+// 筛选条件
+export interface IFilterConfig {
+  column: string;
+  operator: 'equals' | 'contains' | 'startsWith' | 'endsWith' | 'gt' | 'lt' | 'gte' | 'lte' | 'isEmpty' | 'isNotEmpty';
+  value: string;
+}
+
+// 排序规则
+export interface ISortRule {
+  column: string;
+  order: 'asc' | 'desc';
+}
+
+// 视图配置基础接口
+export interface IViewConfigBase {
+  id: string;
+  view_id: string;
+  config_type: ViewType;
+  filters?: IFilterConfig[];
+  sort_rules?: ISortRule[];
+  created_at?: string;
+  updated_at?: string;
+}
+
+// 表格视图配置
+export interface ITableViewConfig extends IViewConfigBase {
+  config_type: 'grid';
+  columns: IColumnConfig[];
+  row_height?: 'compact' | 'normal' | 'expanded';
+  frozen_columns?: number;
+}
+
+// 看板视图配置
+export interface IKanbanViewConfig extends IViewConfigBase {
+  config_type: 'kanban';
+  group_field: string;
+  card_title_field: string;
+  card_fields?: string[];
+  card_cover_field?: string;
+  group_colors?: Record<string, string>;
+}
+
+// 日历视图配置
+export interface ICalendarViewConfig extends IViewConfigBase {
+  config_type: 'calendar';
+  date_field: string;
+  end_date_field?: string;
+  title_field: string;
+  color_field?: string;
+  default_view?: 'month' | 'week' | 'day';
+}
+
+// 甘特图视图配置
+export interface IGanttViewConfig extends IViewConfigBase {
+  config_type: 'gantt';
+  start_date_field: string;
+  end_date_field: string;
+  title_field: string;
+  progress_field?: string;
+  dependency_field?: string;
+  time_scale?: 'day' | 'week' | 'month';
+}
+
+// 视图配置联合类型
+export type IViewConfig = ITableViewConfig | IKanbanViewConfig | ICalendarViewConfig | IGanttViewConfig;
+
+// ==================== 编辑网格布局类型 ====================
+
+// 列位置类型
+export type ColumnPosition = 'left-3' | 'left-2' | 'left-1' | 'center' | 'right-1' | 'right-2' | 'right-3';
+
+// 编辑面板位置
+export interface IEditorPosition {
+  row: number;
+  column: ColumnPosition;
+}
+
+// 编辑面板数据
+export interface IEditorPanelData {
+  id: string;
+  viewId: string;
+  view: ISelectedView;
+  position: IEditorPosition;
+}
+
+// 网格布局配置
+export interface IGridLayoutConfig {
+  rowCount: number;        // 默认1
+  leftColumnCount: number; // 默认3
+  rightColumnCount: number;// 默认3
+}
+
+// 位置选择器状态
+export interface IPositionSelectorState {
+  visible: boolean;
+  view: ISelectedView | null;
+  anchorRect: DOMRect | null;
 }

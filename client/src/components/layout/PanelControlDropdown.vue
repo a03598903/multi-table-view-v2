@@ -3,9 +3,13 @@ import { ref, computed, onMounted, onUnmounted } from 'vue';
 import { useSettingsStore } from '../../stores/settings';
 import { usePanelsStore } from '../../stores/panels';
 import { PANEL_CONFIGS, type PanelKey } from '../../types';
+import PanelSelectorModal from './PanelSelectorModal.vue';
 
 const settingsStore = useSettingsStore();
 const panelsStore = usePanelsStore();
+
+// 面板选择弹出层是否显示
+const showPanelSelector = ref(false);
 
 // 下拉框是否展开
 const isOpen = ref(false);
@@ -124,6 +128,12 @@ function onWidthChange(value: number) {
       <!-- 第1行：快捷操作 -->
       <div class="flex flex-wrap gap-2 mb-4 pb-3 border-b border-gray-200">
         <button
+          class="px-3 py-1.5 bg-indigo-500 text-white rounded text-xs hover:bg-indigo-600 transition"
+          @click="showPanelSelector = true; isOpen = false"
+        >
+          📋 选择视图
+        </button>
+        <button
           class="px-3 py-1.5 bg-blue-500 text-white rounded text-xs hover:bg-blue-600 transition"
           @click="showAll"
         >
@@ -202,5 +212,11 @@ function onWidthChange(value: number) {
         </div>
       </div>
     </div>
+
+    <!-- 面板选择弹出层 -->
+    <PanelSelectorModal
+      :visible="showPanelSelector"
+      @close="showPanelSelector = false"
+    />
   </div>
 </template>

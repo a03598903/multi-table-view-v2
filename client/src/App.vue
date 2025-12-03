@@ -2,16 +2,17 @@
 import { ref, onMounted, onUnmounted, provide } from 'vue';
 import { usePanelsStore } from './stores/panels';
 import { useSettingsStore } from './stores/settings';
-import AppHeader from './components/layout/AppHeader.vue';
-import PanelContainer from './components/layout/PanelContainer.vue';
-import TempPanelContainer from './components/temp/TempPanelContainer.vue';
+import { useEditorGridStore } from './stores/editorGrid';
+import ToolbarArea from './components/layout/ToolbarArea.vue';
+import EditorGridArea from './components/editor/EditorGridArea.vue';
+import PositionSelector from './components/editor/PositionSelector.vue';
 import ContextMenu from './components/common/ContextMenu.vue';
 import Toast from './components/common/Toast.vue';
 import type { IContextTarget } from './types';
-import { PANEL_CONFIGS } from './types';
 
 const panelsStore = usePanelsStore();
 const settingsStore = useSettingsStore();
+const editorGridStore = useEditorGridStore();
 
 // Toast 状态
 const toastMessage = ref('');
@@ -127,6 +128,7 @@ function scrollToActivePanel() {
 onMounted(async () => {
   const settings = await settingsStore.loadSettings();
   await panelsStore.init();
+  await editorGridStore.loadSettings();
 
   // 加载保存的临时面板
   if (settings?.tempPanels && settings.tempPanels.length > 0) {
@@ -149,23 +151,14 @@ onUnmounted(() => {
 
 <template>
   <div class="h-screen overflow-hidden flex flex-col">
-    <!-- 头部 - 固定居中显示 -->
-    <div class="flex-shrink-0 p-4 pb-2" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);">
-      <AppHeader />
-    </div>
+    <!-- 上方区域：工具栏 -->
+    <ToolbarArea class="flex-shrink-0" />
 
-    <!-- 主内容 - 填充剩余高度，支持水平滚动 -->
-    <div
-      ref="mainContentRef"
-      class="flex-1 flex gap-3 p-4 pt-2 overflow-x-auto overflow-y-hidden"
-      style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);"
-    >
-      <!-- 面板容器 -->
-      <PanelContainer />
+    <!-- 下方区域：编辑网格 -->
+    <EditorGridArea class="flex-1" />
 
-      <!-- 临时面板容器 -->
-      <TempPanelContainer />
-    </div>
+    <!-- 悬浮位置选择器 -->
+    <PositionSelector />
 
     <!-- 右键菜单 -->
     <ContextMenu
