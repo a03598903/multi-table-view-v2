@@ -2,6 +2,9 @@
 defineProps<{
   title: string;
   visible: boolean;
+  danger?: boolean;
+  confirmText?: string;
+  cancelText?: string;
 }>();
 
 const emit = defineEmits<{
@@ -29,13 +32,14 @@ const emit = defineEmits<{
             class="px-4 py-2 bg-gray-100 text-gray-600 rounded-md hover:bg-gray-200 transition text-sm"
             @click="emit('close')"
           >
-            取消
+            {{ cancelText || '取消' }}
           </button>
           <button
-            class="px-4 py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600 transition text-sm"
+            class="px-4 py-2 rounded-md transition text-sm"
+            :class="danger ? 'bg-red-500 text-white hover:bg-red-600' : 'bg-blue-500 text-white hover:bg-blue-600'"
             @click="emit('confirm')"
           >
-            确定
+            {{ confirmText || '确定' }}
           </button>
         </div>
       </div>

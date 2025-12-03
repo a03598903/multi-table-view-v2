@@ -4,6 +4,7 @@ import { usePanelsStore } from '../../stores/panels';
 import type { IContextTarget, IFolder, TreeItem } from '../../types';
 import { getPanelConfig } from '../../types';
 import * as api from '../../api';
+import Modal from './Modal.vue';
 
 const props = defineProps<{
   x: number;
@@ -28,6 +29,10 @@ const adjustedY = ref(props.y);
 // 显示文件夹选择子菜单
 const showFolderSubmenu = ref(false);
 
+// 删除确认对话框
+const showDeleteConfirm = ref(false);
+const isDeleting = ref(false);
+
 // 是否为文件夹
 const isFolder = computed(() => props.target?.type === 'folder');
 
@@ -40,6 +45,16 @@ const panelConfig = computed(() => {
 // 获取实体名称
 const entityName = computed(() => {
   return panelConfig.value?.title || '对象';
+});
+
+// 获取当前项目名称
+const currentItemName = computed(() => {
+  if (!props.target) return '';
+  const item = panelsStore.findItemById(
+    panelsStore.data[props.target.panelKey],
+    props.target.id
+  );
+  return item?.name || '此项';
 });
 
 // 递归获取所有文件夹（包括嵌套的子文件夹）
@@ -175,15 +190,22 @@ async function moveToFolder(folderId: string | null) {
   emit('close');
 }
 
-// 删除
-async function deleteItem() {
-  if (!props.target) return;
+// 显示删除确认
+function showDeleteDialog() {
+  showDeleteConfirm.value = true;
+}
 
-  if (!confirm('确定删除吗？')) {
-    emit('close');
-    return;
-  }
+// 取消删除
+function cancelDelete() {
+  showDeleteConfirm.value = false;
+  emit('close');
+}
 
+// 确认删除
+async function confirmDelete() {
+  if (!props.target || isDeleting.value) return;
+
+  isDeleting.value = true;
   try {
     if (props.target.type === 'folder') {
       await api.deleteFolder(props.target.id);
@@ -194,9 +216,11 @@ async function deleteItem() {
     showToast?.('已删除');
   } catch (e) {
     showToast?.('删除失败');
+  } finally {
+    isDeleting.value = false;
+    showDeleteConfirm.value = false;
+    emit('close');
   }
-
-  emit('close');
 }
 
 // 点击外部关闭
@@ -301,10 +325,28 @@ function hideSubmenu() {
 
       <div
         class="flex items-center gap-2 px-3.5 py-2 text-sm text-red-600 hover:bg-gray-100 cursor-pointer"
-        @click="deleteItem"
+        @click="showDeleteDialog"
       >
         🗑️ 删除
       </div>
     </div>
+
+    <!-- 删除确认对话框 -->
+    <Modal
+      :visible="showDeleteConfirm"
+      title="确认删除"
+      :danger="true"
+      confirm-text="删除"
+      @close="cancelDelete"
+      @confirm="confirmDelete"
+    >
+      <div class="text-gray-600">
+        <p class="mb-2">确定要删除 <span class="font-semibold text-gray-800">{{ currentItemName }}</span> 吗？</p>
+        <p v-if="isFolder" class="text-sm text-orange-600">
+          ⚠️ 文件夹内的所有内容也将被删除
+        </p>
+        <p class="text-sm text-gray-400 mt-2">此操作不可撤销</p>
+      </div>
+    </Modal>
   </div>
 </template>

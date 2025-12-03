@@ -77,6 +77,7 @@ const itemColor = computed(() => {
 // 编辑状态
 const isEditing = ref(false);
 const editName = ref('');
+const isSaving = ref(false);
 
 // 本地拖放高亮状态
 const isDropTarget = ref(false);
@@ -250,22 +251,39 @@ function startEdit() {
 
 // 保存编辑
 async function saveEdit() {
-  const newName = editName.value.trim() || '默认名称';
+  if (isSaving.value) return;
+
+  const newName = editName.value.trim();
+  if (!newName) {
+    showToast?.('名称不能为空');
+    return;
+  }
+
   const originalName = isSelectedPanel.value
     ? (props.item as ISelectedView).view_name
     : props.item.name;
 
-  if (newName !== originalName) {
+  if (newName === originalName) {
+    isEditing.value = false;
+    return;
+  }
+
+  isSaving.value = true;
+  try {
     if (isFolder.value) {
       await api.updateFolder(props.item.id, { name: newName });
     } else {
       await api.updateEntity(props.panelKey, props.item.id, { name: newName });
     }
     showToast?.('已保存');
+    isEditing.value = false;
+    await panelsStore.loadPanel(props.panelKey);
+  } catch (err) {
+    console.error('保存失败:', err);
+    showToast?.('保存失败');
+  } finally {
+    isSaving.value = false;
   }
-
-  isEditing.value = false;
-  await panelsStore.loadPanel(props.panelKey);
 }
 
 // 取消编辑
@@ -275,9 +293,12 @@ function cancelEdit() {
 
 // 处理键盘事件
 function handleKeydown(e: KeyboardEvent) {
+  if (isSaving.value) return;
   if (e.key === 'Enter') {
+    e.preventDefault();
     saveEdit();
   } else if (e.key === 'Escape') {
+    e.preventDefault();
     cancelEdit();
   }
 }
@@ -456,6 +477,7 @@ function handleChildMoveToFolder(item: TreeItem, folderId: string | null) {
 
       <!-- 编辑按钮 -->
       <button
+        v-if="!isEditing"
         class="w-5 h-5 flex items-center justify-center rounded text-gray-400 hover:bg-blue-50 hover:text-blue-500 transition text-xs"
         @click.stop="startEdit"
       >
@@ -479,15 +501,32 @@ function handleChildMoveToFolder(item: TreeItem, folderId: string | null) {
       <!-- 名称 -->
       <template v-if="isSelectedPanel">
         <div class="flex-1 flex flex-col min-w-0">
-          <input
-            v-if="isEditing"
-            v-model="editName"
-            class="bg-white border border-blue-500 rounded px-1 py-0.5 text-sm outline-none"
-            @blur="saveEdit"
-            @keydown="handleKeydown"
-            @click.stop
-            autofocus
-          />
+          <div v-if="isEditing" class="flex items-center gap-1">
+            <input
+              v-model="editName"
+              class="flex-1 bg-white border border-blue-500 rounded px-1 py-0.5 text-sm outline-none min-w-0"
+              :disabled="isSaving"
+              @keydown="handleKeydown"
+              @click.stop
+              autofocus
+            />
+            <button
+              class="w-5 h-5 flex items-center justify-center rounded bg-green-500 text-white hover:bg-green-600 transition text-xs disabled:opacity-50 disabled:cursor-not-allowed"
+              :disabled="isSaving"
+              @click.stop="saveEdit"
+              title="保存 (Enter)"
+            >
+              {{ isSaving ? '...' : '✓' }}
+            </button>
+            <button
+              class="w-5 h-5 flex items-center justify-center rounded bg-gray-400 text-white hover:bg-gray-500 transition text-xs disabled:opacity-50"
+              :disabled="isSaving"
+              @click.stop="cancelEdit"
+              title="取消 (Esc)"
+            >
+              ✕
+            </button>
+          </div>
           <template v-else>
             <span class="font-medium text-gray-800 truncate">
               {{ (item as ISelectedView).view_name }}
@@ -503,6 +542,7 @@ function handleChildMoveToFolder(item: TreeItem, folderId: string | null) {
         </div>
         <!-- 定位按钮 -->
         <button
+          v-if="!isEditing"
           class="w-5 h-5 flex items-center justify-center rounded bg-blue-100 text-blue-600 hover:bg-blue-200 transition text-xs"
           @click.stop="locateToView"
           title="定位到相关对象"
@@ -511,6 +551,7 @@ function handleChildMoveToFolder(item: TreeItem, folderId: string | null) {
         </button>
         <!-- 展示按钮 -->
         <button
+          v-if="!isEditing"
           class="w-5 h-5 flex items-center justify-center rounded bg-green-100 text-green-600 hover:bg-green-200 transition text-xs"
           @click.stop="addToDisplay"
           title="添加到展示视图"
@@ -519,6 +560,7 @@ function handleChildMoveToFolder(item: TreeItem, folderId: string | null) {
         </button>
         <!-- 移除按钮 -->
         <button
+          v-if="!isEditing"
           class="w-5 h-5 flex items-center justify-center rounded bg-red-100 text-red-600 hover:bg-red-200 transition text-sm"
           @click.stop="removeSelected"
         >
@@ -526,15 +568,32 @@ function handleChildMoveToFolder(item: TreeItem, folderId: string | null) {
         </button>
       </template>
       <template v-else>
-        <input
-          v-if="isEditing"
-          v-model="editName"
-          class="flex-1 bg-white border border-blue-500 rounded px-1 py-0.5 text-sm outline-none min-w-0"
-          @blur="saveEdit"
-          @keydown="handleKeydown"
-          @click.stop
-          autofocus
-        />
+        <div v-if="isEditing" class="flex-1 flex items-center gap-1 min-w-0">
+          <input
+            v-model="editName"
+            class="flex-1 bg-white border border-blue-500 rounded px-1 py-0.5 text-sm outline-none min-w-0"
+            :disabled="isSaving"
+            @keydown="handleKeydown"
+            @click.stop
+            autofocus
+          />
+          <button
+            class="w-5 h-5 flex items-center justify-center rounded bg-green-500 text-white hover:bg-green-600 transition text-xs flex-shrink-0 disabled:opacity-50 disabled:cursor-not-allowed"
+            :disabled="isSaving"
+            @click.stop="saveEdit"
+            title="保存 (Enter)"
+          >
+            {{ isSaving ? '...' : '✓' }}
+          </button>
+          <button
+            class="w-5 h-5 flex items-center justify-center rounded bg-gray-400 text-white hover:bg-gray-500 transition text-xs flex-shrink-0 disabled:opacity-50"
+            :disabled="isSaving"
+            @click.stop="cancelEdit"
+            title="取消 (Esc)"
+          >
+            ✕
+          </button>
+        </div>
         <span v-else class="flex-1 truncate">{{ item.name }}</span>
       </template>
 
@@ -550,6 +609,7 @@ function handleChildMoveToFolder(item: TreeItem, folderId: string | null) {
 
       <!-- 更多操作按钮 -->
       <button
+        v-if="!isEditing"
         class="w-6 h-6 flex items-center justify-center rounded text-gray-400 hover:bg-gray-200 hover:text-gray-600 transition"
         @click.stop="handleMoreClick"
         title="更多操作"
