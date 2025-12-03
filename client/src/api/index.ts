@@ -137,6 +137,30 @@ export async function getViewLocation(viewId: string): Promise<IViewLocation | n
   }
 }
 
+// ==================== 单个实体获取API ====================
+
+// 获取单个表格
+export async function fetchTable(id: string): Promise<TreeItem | null> {
+  try {
+    const { data } = await api.get<TreeItem>(`/tables/${id}`);
+    return data;
+  } catch (e) {
+    console.error('获取表格失败:', e);
+    return null;
+  }
+}
+
+// 获取单个视图
+export async function fetchView(id: string): Promise<TreeItem | null> {
+  try {
+    const { data } = await api.get<TreeItem>(`/views/${id}`);
+    return data;
+  } catch (e) {
+    console.error('获取视图失败:', e);
+    return null;
+  }
+}
+
 // ==================== 设置API ====================
 
 // 获取设置

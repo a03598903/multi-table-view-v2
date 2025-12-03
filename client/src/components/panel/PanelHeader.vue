@@ -24,7 +24,7 @@ const emit = defineEmits<{
       @click.stop="emit('toggle')"
       title="收缩面板"
     >
-      <span class="text-sm font-bold">◀</span>
+      <span class="text-sm font-bold">《</span>
     </button>
 
     <!-- 数量徽章 - 左侧第2个 -->
@@ -46,7 +46,7 @@ const emit = defineEmits<{
   >
     <!-- 展开按钮图标 - 显眼的展开提示 -->
     <div class="w-8 h-8 flex items-center justify-center rounded-full bg-blue-500 text-white group-hover:bg-blue-600 transition shadow-md mb-2">
-      <span class="text-sm font-bold">▶</span>
+      <span class="text-sm font-bold">》</span>
     </div>
 
     <!-- 数量徽章 -->

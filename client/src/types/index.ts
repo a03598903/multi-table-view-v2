@@ -104,9 +104,27 @@ export interface ISettings {
   panelWidths: Record<PanelKey, number>;
   editorWidth: number;
   collapsedPanels: PanelKey[];
+  hiddenPanels?: PanelKey[];
   editorCollapsed?: boolean;
   displayViewWidths?: Record<string, number>;
   collapsedDisplayViews?: string[];
+  // 临时面板数据
+  tempPanels?: ITempPanelSettings[];
+}
+
+// 临时面板保存设置
+export interface ITempPanelSettings {
+  id: string;
+  type: 'table' | 'view';
+  tableId: string;
+  viewId?: string;
+  columns: { key: string; label: string; visible: boolean }[];
+  filters: { column: string; operator: string; value: string }[];
+  sortBy: string | null;
+  sortOrder: 'asc' | 'desc';
+  tableData: Record<string, any>[];
+  collapsed: boolean;
+  width: number;
 }
 
 // 右键菜单目标

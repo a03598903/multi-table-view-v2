@@ -25,6 +25,19 @@ function createEntityRouter(
     }
   });
 
+  // 获取单个实体
+  entityRouter.get('/:id', (req: Request, res: Response) => {
+    try {
+      const item = service.getById(req.params.id);
+      if (!item) {
+        return res.status(404).json({ error: '未找到' });
+      }
+      res.json(item);
+    } catch (err) {
+      res.status(500).json({ error: (err as Error).message });
+    }
+  });
+
   // 创建
   entityRouter.post('/', (req: Request, res: Response) => {
     try {

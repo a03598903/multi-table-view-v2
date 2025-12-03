@@ -78,7 +78,7 @@ const viewNameChars = computed(() => props.view.view_name.split(''));
           class="w-8 h-8 flex items-center justify-center rounded-full text-white group-hover:opacity-90 transition shadow-md mb-2"
           :style="{ background: view.table_color || '#3b82f6' }"
         >
-          <span class="text-sm font-bold">▶</span>
+          <span class="text-sm font-bold">》</span>
         </div>
 
         <!-- 关闭按钮 -->
@@ -145,7 +145,7 @@ const viewNameChars = computed(() => props.view.view_name.split(''));
           @click.stop="toggleCollapse"
           title="收缩面板"
         >
-          <span class="text-sm font-bold">◀</span>
+          <span class="text-sm font-bold">《</span>
         </button>
 
         <!-- 拖拽手柄 -->

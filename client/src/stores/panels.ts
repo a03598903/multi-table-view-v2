@@ -1,8 +1,23 @@
 import { defineStore } from 'pinia';
-import { ref, computed } from 'vue';
-import type { PanelKey, TreeItem, ISelectedView } from '../types';
+import { ref, computed, watch } from 'vue';
+import type { PanelKey, TreeItem, ISelectedView, ITable, IView, ITempPanelSettings } from '../types';
 import { PANEL_CONFIGS, getPanelConfig } from '../types';
 import * as api from '../api';
+
+// 临时面板数据接口
+export interface ITempPanelData {
+  id: string;
+  type: 'table' | 'view';
+  table: ITable;
+  view?: IView;
+  tableData: Record<string, any>[];
+  columns: { key: string; label: string; visible: boolean }[];
+  filters: { column: string; operator: string; value: string }[];
+  sortBy: string | null;
+  sortOrder: 'asc' | 'desc';
+  collapsed: boolean;
+  width: number;
+}
 
 export const usePanelsStore = defineStore('panels', () => {
   // 状态
@@ -50,6 +65,9 @@ export const usePanelsStore = defineStore('panels', () => {
 
   // 当前选中的面板索引（用于键盘导航）
   const activePanelIndex = ref<number>(0);
+
+  // 临时面板列表
+  const tempPanels = ref<ITempPanelData[]>([]);
 
   // 计算属性
   const getPanelData = computed(() => (key: PanelKey) => data.value[key]);
@@ -371,6 +389,258 @@ export const usePanelsStore = defineStore('panels', () => {
     setActivePanelIndex(activePanelIndex.value + 1);
   }
 
+  // ==================== 临时面板管理 ====================
+
+  // 保存防抖
+  let tempPanelSaveTimeout: ReturnType<typeof setTimeout> | null = null;
+
+  // 调度保存临时面板数据
+  function scheduleTempPanelSave(): void {
+    if (tempPanelSaveTimeout) {
+      clearTimeout(tempPanelSaveTimeout);
+    }
+    tempPanelSaveTimeout = setTimeout(async () => {
+      try {
+        const tempPanelSettings: ITempPanelSettings[] = tempPanels.value.map(p => ({
+          id: p.id,
+          type: p.type,
+          tableId: p.table.id,
+          viewId: p.view?.id,
+          columns: p.columns,
+          filters: p.filters,
+          sortBy: p.sortBy,
+          sortOrder: p.sortOrder,
+          tableData: p.tableData,
+          collapsed: p.collapsed,
+          width: p.width
+        }));
+        await api.saveSettings({ tempPanels: tempPanelSettings });
+      } catch (e) {
+        console.error('保存临时面板设置失败', e);
+      }
+    }, 500);
+  }
+
+  // 生成示范表格数据
+  function generateSampleData(table: ITable): Record<string, any>[] {
+    const sampleData: Record<string, any>[] = [];
+    for (let i = 1; i <= 10; i++) {
+      sampleData.push({
+        id: `${table.id}-row-${i}`,
+        序号: i,
+        名称: `${table.name}-项目${i}`,
+        状态: ['进行中', '已完成', '待处理'][i % 3],
+        创建日期: `2024-${String(Math.floor(Math.random() * 12) + 1).padStart(2, '0')}-${String(Math.floor(Math.random() * 28) + 1).padStart(2, '0')}`,
+        金额: Math.floor(Math.random() * 100000),
+        负责人: ['张三', '李四', '王五', '赵六'][i % 4],
+        备注: `这是${table.name}的第${i}条记录`
+      });
+    }
+    return sampleData;
+  }
+
+  // 生成默认列配置
+  function generateDefaultColumns(): { key: string; label: string; visible: boolean }[] {
+    return [
+      { key: '序号', label: '序号', visible: true },
+      { key: '名称', label: '名称', visible: true },
+      { key: '状态', label: '状态', visible: true },
+      { key: '创建日期', label: '创建日期', visible: true },
+      { key: '金额', label: '金额', visible: true },
+      { key: '负责人', label: '负责人', visible: true },
+      { key: '备注', label: '备注', visible: true }
+    ];
+  }
+
+  // 打开表格临时面板（显示默认视图）
+  function openTableTempPanel(table: ITable) {
+    // 检查是否已存在
+    const existing = tempPanels.value.find(p => p.type === 'table' && p.table.id === table.id);
+    if (existing) {
+      // 如果已存在但是折叠状态，展开它
+      existing.collapsed = false;
+      scheduleTempPanelSave();
+      return;
+    }
+
+    const panelData: ITempPanelData = {
+      id: `temp-table-${table.id}`,
+      type: 'table',
+      table,
+      tableData: generateSampleData(table),
+      columns: generateDefaultColumns(),
+      filters: [],
+      sortBy: null,
+      sortOrder: 'asc',
+      collapsed: true, // 默认以收缩形式出现
+      width: 50
+    };
+
+    tempPanels.value.push(panelData);
+    scheduleTempPanelSave();
+  }
+
+  // 打开视图临时面板
+  function openViewTempPanel(view: IView, table: ITable) {
+    // 检查是否已存在
+    const existing = tempPanels.value.find(p => p.type === 'view' && p.view?.id === view.id);
+    if (existing) {
+      // 如果已存在但是折叠状态，展开它
+      existing.collapsed = false;
+      scheduleTempPanelSave();
+      return;
+    }
+
+    // 根据视图类型设置不同的列可见性和筛选条件
+    const columns = generateDefaultColumns();
+
+    // 根据视图类型调整列可见性
+    if (view.view_type === 'kanban') {
+      columns.find(c => c.key === '备注')!.visible = false;
+      columns.find(c => c.key === '创建日期')!.visible = false;
+    } else if (view.view_type === 'calendar') {
+      columns.find(c => c.key === '金额')!.visible = false;
+      columns.find(c => c.key === '备注')!.visible = false;
+    }
+
+    const panelData: ITempPanelData = {
+      id: `temp-view-${view.id}`,
+      type: 'view',
+      table,
+      view,
+      tableData: generateSampleData(table),
+      columns,
+      filters: [],
+      sortBy: '序号',
+      sortOrder: 'asc',
+      collapsed: true, // 默认以收缩形式出现
+      width: 50
+    };
+
+    tempPanels.value.push(panelData);
+    scheduleTempPanelSave();
+  }
+
+  // 关闭临时面板
+  function closeTempPanel(panelId: string) {
+    const index = tempPanels.value.findIndex(p => p.id === panelId);
+    if (index !== -1) {
+      tempPanels.value.splice(index, 1);
+      scheduleTempPanelSave();
+    }
+  }
+
+  // 切换临时面板折叠状态
+  function toggleTempPanelCollapsed(panelId: string) {
+    const panel = tempPanels.value.find(p => p.id === panelId);
+    if (panel) {
+      panel.collapsed = !panel.collapsed;
+      scheduleTempPanelSave();
+    }
+  }
+
+  // 设置临时面板宽度
+  function setTempPanelWidth(panelId: string, width: number) {
+    const panel = tempPanels.value.find(p => p.id === panelId);
+    if (panel) {
+      panel.width = width;
+      scheduleTempPanelSave();
+    }
+  }
+
+  // 更新临时面板的列可见性
+  function updateTempPanelColumn(panelId: string, columnKey: string, visible: boolean) {
+    const panel = tempPanels.value.find(p => p.id === panelId);
+    if (panel) {
+      const column = panel.columns.find(c => c.key === columnKey);
+      if (column) {
+        column.visible = visible;
+        scheduleTempPanelSave();
+      }
+    }
+  }
+
+  // 更新临时面板的筛选条件
+  function updateTempPanelFilters(panelId: string, filters: { column: string; operator: string; value: string }[]) {
+    const panel = tempPanels.value.find(p => p.id === panelId);
+    if (panel) {
+      panel.filters = filters;
+      scheduleTempPanelSave();
+    }
+  }
+
+  // 更新临时面板的排序
+  function updateTempPanelSort(panelId: string, sortBy: string | null, sortOrder: 'asc' | 'desc') {
+    const panel = tempPanels.value.find(p => p.id === panelId);
+    if (panel) {
+      panel.sortBy = sortBy;
+      panel.sortOrder = sortOrder;
+      scheduleTempPanelSave();
+    }
+  }
+
+  // 更新临时面板的表格数据（单元格编辑）
+  function updateTempPanelCellData(panelId: string, rowId: string, columnKey: string, value: any) {
+    const panel = tempPanels.value.find(p => p.id === panelId);
+    if (panel) {
+      const row = panel.tableData.find(r => r.id === rowId);
+      if (row) {
+        row[columnKey] = value;
+        scheduleTempPanelSave();
+      }
+    }
+  }
+
+  // 加载保存的临时面板
+  async function loadTempPanels(settings: ITempPanelSettings[]): Promise<void> {
+    tempPanels.value = [];
+
+    for (const s of settings) {
+      // 从服务器获取真实的表格信息
+      const tableData = await api.fetchTable(s.tableId);
+      const table: ITable = tableData ? (tableData as ITable) : {
+        id: s.tableId,
+        code: '',
+        name: `表格-${s.tableId}`,
+        type: 'table',
+        color: '#3b82f6',
+        project_id: '',
+        sort_order: 0
+      };
+
+      // 从服务器获取真实的视图信息
+      let view: IView | undefined;
+      if (s.viewId) {
+        const viewData = await api.fetchView(s.viewId);
+        view = viewData ? (viewData as IView) : {
+          id: s.viewId,
+          code: '',
+          name: `视图-${s.viewId}`,
+          type: 'view',
+          view_type: 'grid',
+          table_id: s.tableId,
+          sort_order: 0
+        };
+      }
+
+      const panelData: ITempPanelData = {
+        id: s.id,
+        type: s.type,
+        table,
+        view,
+        tableData: s.tableData || [],
+        columns: s.columns || generateDefaultColumns(),
+        filters: s.filters || [],
+        sortBy: s.sortBy,
+        sortOrder: s.sortOrder || 'asc',
+        collapsed: s.collapsed ?? true,
+        width: s.width || 50
+      };
+
+      tempPanels.value.push(panelData);
+    }
+  }
+
   // 初始化
   async function init(): Promise<void> {
     await loadPanelAndSelect('shareholder', true);
@@ -387,6 +657,7 @@ export const usePanelsStore = defineStore('panels', () => {
     displayedViews,
     collapsedDisplayViews,
     activePanelIndex,
+    tempPanels,
     getPanelData,
     getSelectedItem,
     isLoading,
@@ -410,6 +681,16 @@ export const usePanelsStore = defineStore('panels', () => {
     setActivePanelIndex,
     prevPanel,
     nextPanel,
+    openTableTempPanel,
+    openViewTempPanel,
+    closeTempPanel,
+    toggleTempPanelCollapsed,
+    setTempPanelWidth,
+    updateTempPanelColumn,
+    updateTempPanelFilters,
+    updateTempPanelSort,
+    updateTempPanelCellData,
+    loadTempPanels,
     init
   };
 });

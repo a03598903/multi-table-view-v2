@@ -53,7 +53,7 @@ const panelStyle = computed(() => {
       <div class="flex flex-col items-center py-3 bg-gray-50 border-b border-gray-200 cursor-pointer flex-1 hover:bg-blue-50 transition group">
         <!-- 展开按钮图标 - 显眼的展开提示 -->
         <div class="w-8 h-8 flex items-center justify-center rounded-full bg-blue-500 text-white group-hover:bg-blue-600 transition shadow-md mb-2">
-          <span class="text-sm font-bold">▶</span>
+          <span class="text-sm font-bold">》</span>
         </div>
 
         <!-- 竖向标题 - 每行1字，正常朝上 -->
@@ -106,7 +106,7 @@ const panelStyle = computed(() => {
           @click.stop="toggleCollapse"
           title="收缩面板"
         >
-          <span class="text-sm font-bold">◀</span>
+          <span class="text-sm font-bold">《</span>
         </button>
 
         <!-- 图标和标题 -->

@@ -2,7 +2,7 @@
 import { computed, ref, inject, watch, nextTick, type ComputedRef, type Ref } from 'vue';
 import draggable from 'vuedraggable';
 import { usePanelsStore } from '../../stores/panels';
-import type { TreeItem, PanelKey, ISelectedView, IContextTarget, IFolder, IReorderItem } from '../../types';
+import type { TreeItem, PanelKey, ISelectedView, IContextTarget, IFolder, IReorderItem, ITable, IView } from '../../types';
 import { getPanelConfig } from '../../types';
 import * as api from '../../api';
 
@@ -56,8 +56,8 @@ const children = computed(() => {
   return [];
 });
 
-// 是否为视图面板（显示复选框）
-const showCheckbox = computed(() => props.panelKey === 'view');
+// 是否为视图面板（不再显示复选框）
+const showCheckbox = computed(() => false);
 
 // 是否已选（视图）
 const isChecked = computed(() => {
@@ -151,8 +151,24 @@ function handleClick() {
   panelsStore.selectItem(props.panelKey, props.item);
 }
 
-// 双击编辑
+// 双击编辑 或 打开临时面板
 function handleDoubleClick() {
+  // 如果是表格，打开表格临时面板
+  if (props.item.type === 'table') {
+    panelsStore.openTableTempPanel(props.item as ITable);
+    showToast?.('已打开表格视图');
+    return;
+  }
+  // 如果是视图，打开视图临时面板
+  if (props.item.type === 'view') {
+    const selectedTable = panelsStore.selected.table as ITable | null;
+    if (selectedTable) {
+      panelsStore.openViewTempPanel(props.item as IView, selectedTable);
+      showToast?.('已打开视图');
+    }
+    return;
+  }
+  // 其他类型，进入编辑模式
   startEdit();
 }
 
@@ -431,11 +447,11 @@ function handleChildMoveToFolder(item: TreeItem, folderId: string | null) {
 
       <!-- 展开图标 -->
       <span
-        class="w-4 h-4 flex items-center justify-center text-xs text-gray-400 transition-transform cursor-pointer"
-        :class="{ 'rotate-90': isExpanded, 'invisible': !isFolder }"
+        class="w-4 h-4 flex items-center justify-center text-xs text-gray-400 cursor-pointer"
+        :class="{ 'invisible': !isFolder }"
         @click="toggleFolder"
       >
-        ▶
+        {{ isExpanded ? '∨' : '》' }}
       </span>
 
       <!-- 编辑按钮 -->

@@ -4,8 +4,7 @@ import { usePanelsStore } from './stores/panels';
 import { useSettingsStore } from './stores/settings';
 import AppHeader from './components/layout/AppHeader.vue';
 import PanelContainer from './components/layout/PanelContainer.vue';
-import EditorPanel from './components/editor/EditorPanel.vue';
-import DisplayViewsContainer from './components/display/DisplayViewsContainer.vue';
+import TempPanelContainer from './components/temp/TempPanelContainer.vue';
 import ContextMenu from './components/common/ContextMenu.vue';
 import Toast from './components/common/Toast.vue';
 import type { IContextTarget } from './types';
@@ -126,8 +125,13 @@ function scrollToActivePanel() {
 
 // 初始化
 onMounted(async () => {
-  await settingsStore.loadSettings();
+  const settings = await settingsStore.loadSettings();
   await panelsStore.init();
+
+  // 加载保存的临时面板
+  if (settings?.tempPanels && settings.tempPanels.length > 0) {
+    await panelsStore.loadTempPanels(settings.tempPanels);
+  }
 
   document.addEventListener('mousedown', handleGlobalMouseDown);
   document.addEventListener('mousemove', handleGlobalMouseMove);
@@ -159,11 +163,8 @@ onUnmounted(() => {
       <!-- 面板容器 -->
       <PanelContainer />
 
-      <!-- 编辑器面板 -->
-      <EditorPanel />
-
-      <!-- 展示视图容器 -->
-      <DisplayViewsContainer />
+      <!-- 临时面板容器 -->
+      <TempPanelContainer />
     </div>
 
     <!-- 右键菜单 -->

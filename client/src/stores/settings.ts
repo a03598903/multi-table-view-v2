@@ -21,6 +21,9 @@ export const useSettingsStore = defineStore('settings', () => {
   const editorWidth = ref(DEFAULT_EDITOR_WIDTH);
   const collapsedPanels = ref<Set<PanelKey>>(new Set());
 
+  // 隐藏的面板（完全不显示，包括收缩状态）
+  const hiddenPanels = ref<Set<PanelKey>>(new Set());
+
   // 第7栏（编辑器面板）折叠状态，默认收缩
   const editorCollapsed = ref(true);
 
@@ -72,6 +75,31 @@ export const useSettingsStore = defineStore('settings', () => {
   // 面板是否折叠
   function isPanelCollapsed(key: PanelKey): boolean {
     return collapsedPanels.value.has(key);
+  }
+
+  // 面板是否隐藏
+  function isPanelHidden(key: PanelKey): boolean {
+    return hiddenPanels.value.has(key);
+  }
+
+  // 切换面板隐藏
+  function togglePanelHidden(key: PanelKey): void {
+    if (hiddenPanels.value.has(key)) {
+      hiddenPanels.value.delete(key);
+    } else {
+      hiddenPanels.value.add(key);
+    }
+    scheduleSave();
+  }
+
+  // 设置面板隐藏状态
+  function setPanelHidden(key: PanelKey, hidden: boolean): void {
+    if (hidden) {
+      hiddenPanels.value.add(key);
+    } else {
+      hiddenPanels.value.delete(key);
+    }
+    scheduleSave();
   }
 
   // 切换编辑器折叠
@@ -133,6 +161,7 @@ export const useSettingsStore = defineStore('settings', () => {
           panelWidths: panelWidths.value,
           editorWidth: editorWidth.value,
           collapsedPanels: Array.from(collapsedPanels.value) as PanelKey[],
+          hiddenPanels: Array.from(hiddenPanels.value) as PanelKey[],
           editorCollapsed: editorCollapsed.value,
           displayViewWidths: displayViewWidths.value
         });
@@ -155,14 +184,25 @@ export const useSettingsStore = defineStore('settings', () => {
       if (settings.collapsedPanels) {
         collapsedPanels.value = new Set(settings.collapsedPanels);
       }
+      if (settings.hiddenPanels) {
+        hiddenPanels.value = new Set(settings.hiddenPanels);
+      } else {
+        // 默认隐藏除了 table 和 view 之外的面板
+        hiddenPanels.value = new Set(['shareholder', 'company', 'project'] as PanelKey[]);
+      }
       if (settings.editorCollapsed !== undefined) {
         editorCollapsed.value = settings.editorCollapsed;
       }
       if (settings.displayViewWidths) {
         displayViewWidths.value = settings.displayViewWidths;
       }
+
+      // 返回临时面板设置供 panels store 使用
+      return settings;
     } catch (e) {
       console.log('使用默认设置');
+      // 设置默认隐藏的面板
+      hiddenPanels.value = new Set(['shareholder', 'company', 'project'] as PanelKey[]);
     }
   }
 
@@ -170,6 +210,7 @@ export const useSettingsStore = defineStore('settings', () => {
     panelWidths,
     editorWidth,
     collapsedPanels,
+    hiddenPanels,
     editorCollapsed,
     displayViewWidths,
     getPanelWidth,
@@ -179,6 +220,9 @@ export const useSettingsStore = defineStore('settings', () => {
     resetEditorWidth,
     togglePanel,
     isPanelCollapsed,
+    isPanelHidden,
+    togglePanelHidden,
+    setPanelHidden,
     toggleEditorCollapsed,
     isEditorCollapsed,
     setEditorCollapsed,
